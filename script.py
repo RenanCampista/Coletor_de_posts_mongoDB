@@ -1,6 +1,5 @@
 import pandas as pd
 import json
-import sys
 import argparse
 from enum import Enum
 
@@ -31,7 +30,7 @@ class SocialNetwork(Enum):
                 'text': body.get('text', ''),
                 'authorImage': body.get('authorImage', ''),
                 'locationName': body.get('locationName', ''),
-                'authorBio': body.get('authorBio', ''),
+                'authorBio': (body.get('authorBio') or '').replace('\n', ' '),
                 'authorFriendsCount': body.get('authorFriendsCount', 0),
                 'statuses': body.get('statuses', 0),
                 'statusId': body.get('statusId', ''),
@@ -67,7 +66,7 @@ class SocialNetwork(Enum):
                 'authorHeart': body.get('authorHeart', 0),
                 'authorVideo': body.get('authorVideo', 0),
                 'authorDigg': body.get('authorDigg', 0),
-                'authorBio': body.get('authorBio', ''),
+                'authorBio': (body.get('authorBio') or '').replace('\n', ' '),
                 'authorVerified': body.get('authorVerified', False),
                 'commentUrl': body.get('commentUrl', ''),
                 'commentCount': metadata.get('stats', {}).get('comment', 0),
@@ -87,7 +86,7 @@ class SocialNetwork(Enum):
                 'authorUrl': body.get('authorUrl', ''),
                 'authorId': body.get('authorId', ''),
                 'timestamp': body.get('timestamp', {}).get('$date', ''),
-                'text': body.get('text', ''),
+                'text': (body.get('text') or '').replace('\n', ' '),
                 "authorImage": body.get('authorImage', ''),
                 "reply": body.get('reply', ''),
                 "shortcode": body.get('shortcode', ''),
@@ -99,7 +98,7 @@ class SocialNetwork(Enum):
                 'commentCount': metadata.get('stats', {}).get('comment', 0),
                 'likeCount': metadata.get('stats', {}).get('like', 0),
                 'seenCount': metadata.get('stats', {}).get('seen', 0),
-            })
+            })    
             return new_row
         if self == self.__class__.FACEBOOK:
             body = history['body']
@@ -170,7 +169,6 @@ if __name__ == '__main__':
         help="""Social network to convert file\n\n
         Currently supported: twitter, tiktok, instagram, facebook""",
     )
-    
     
     args = parser.parse_args()
     posts = read_json_file(args.path)
