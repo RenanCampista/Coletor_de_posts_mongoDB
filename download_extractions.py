@@ -1,7 +1,52 @@
-import csv
-import json
-import argparse
+from pymongo import MongoClient, errors
+from dotenv import load_dotenv
+from datetime import datetime
+from datetime import datetime
 from enum import Enum
+import subprocess
+import argparse
+import time
+import json
+import csv
+import os
+
+
+def establish_ssh_tunnel(ssh_command: list, ssh_passphrase: str) -> subprocess.Popen:
+    """Establishes an SSH tunnel using a given command and passphrase. """
+    
+    print("Establishing SSH tunnel...")
+    ssh_process = subprocess.Popen(ssh_command, stdin=subprocess.PIPE)
+    ssh_process.communicate(input=ssh_passphrase.encode())
+    time.sleep(5)  # Wait to ensure the tunnel is ready
+    print("SSH tunnel established.")
+    return ssh_process
+
+
+def connect_to_mongodb(connection_string: str) -> MongoClient:
+    """Connects to a MongoDB database using a given connection string."""
+    
+    print("Connecting to MongoDB...")
+    client = MongoClient(connection_string, serverSelectionTimeoutMS=20000)
+    client.admin.command('ping')  # Force a server selection to check the connection
+    print("MongoDB connection established.")
+    return client
+
+
+def query_mongodb(client: MongoClient, database: str, collection: str, query: dict) -> list:
+    """Queries a MongoDB collection and returns the results."""
+    
+    db = client[database]
+    collection = db[collection]
+    results = collection.find(query)
+    return [document for document in results]
+
+
+def save_data_to_json(data: list, filename: str) -> None:
+    """Saves a list of data to a JSON file."""
+    
+    with open(filename, "w") as file:
+        json.dump(data, file, indent=4, default=str)
+    print("Data successfully downloaded!")
 
 
 class SocialNetwork(Enum):
@@ -120,14 +165,7 @@ class SocialNetwork(Enum):
         raise ValueError(f"Invalid social network {self}.")
 
 
-def read_json_file(file_path: str) -> dict:
-    """Reads a JSON file and returns its content as a dictionary."""
-    
-    with open(file_path, 'r', encoding='utf-8') as json_file:
-        return json.load(json_file)
-
-
-def organize_data(posts: dict, social_network: SocialNetwork):
+def organize_data(posts: dict, social_network: SocialNetwork) -> list:
     """Organize data to be saved in a csv file"""
     
     data = []
@@ -155,16 +193,73 @@ def save_to_csv(data: list, social_network: SocialNetwork):
             writer.writerow(row)
 
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(
-        description="Converts JSON extraction data to csv format.",
-        formatter_class=argparse.RawTextHelpFormatter,
-    )
+def env_variable(var_name: str) -> str:
+    """Gets an environment variable or raises an exception if it is not set."""
     
-    parser.add_argument(
-        "path",
-        type=str,
-        help="Path to the JSON file to be converted.",
+    if not (var_value := os.getenv(var_name)):
+        raise ValueError(f"Environment variable {var_name} is required")
+    return var_value
+
+
+def main(since_date_str: str, until_date_str: str):
+    since_date = datetime.strptime(since_date_str, "%Y-%m-%d")
+    until_date = datetime.strptime(until_date_str, "%Y-%m-%d")
+    
+    if since_date > until_date:
+        raise ValueError("Start date must be before end date.")
+    
+    since_date = since_date.replace(hour=0, minute=0, second=0)
+    until_date = until_date.replace(hour=23, minute=59, second=59)
+    
+    load_dotenv()
+
+    SSH_HOST = env_variable("SSH_HOST")
+    SSH_USER = env_variable("SSH_USER")
+    SSH_PRIVATE_KEY = env_variable("SSH_PRIVATE_KEY")
+    SSH_PASSPHRASE = env_variable("SSH_PASSPHRASE")
+    MONGO_CONNECTION_STRING = env_variable("MONGO_CONNECTION_STRING")
+    MONGO_DATABASE = env_variable("MONGO_DATABASE")
+    MONGO_COLLECTION = env_variable("MONGO_COLLECTION")
+
+    SSH_COMMAND = [
+        "ssh",
+        "-f", "-N",
+        "-o", "TCPKeepAlive=yes",
+        "-o", "ServerAliveInterval=60",
+        "-L", f"27018:localhost:27018",
+        "-i", SSH_PRIVATE_KEY,
+        f"{SSH_USER}@{SSH_HOST}"
+    ]
+
+    since_date = since_date.replace(hour=0, minute=0, second=0)
+    until_date = until_date.replace(hour=23, minute=59, second=59)
+
+    QUERY = {
+        "createdAt": {
+            "$gte": since_date,
+            "$lte": until_date
+        }
+    }
+
+    try:
+        ssh_process = establish_ssh_tunnel(SSH_COMMAND, SSH_PASSPHRASE)
+        client = connect_to_mongodb(MONGO_CONNECTION_STRING)
+        data = query_mongodb(client, MONGO_DATABASE, MONGO_COLLECTION, QUERY)
+        data = organize_data(data, args.social_network)
+        save_to_csv(data, args.social_network)
+    except errors.ServerSelectionTimeoutError as err:
+        print(f"Erro de seleção de servidor ao conectar ao MongoDB: {err}")
+    except Exception as e:
+        print(f"Erro: {e}")
+    finally:
+        print("Fechando o túnel SSH.")
+        ssh_process.terminate()
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Download data from MongoDB and save it to a csv file.",
+        formatter_class=argparse.RawTextHelpFormatter,
     )
     
     parser.add_argument(
@@ -175,8 +270,20 @@ if __name__ == '__main__':
         Currently supported: twitter, tiktok, instagram, facebook""",
     )
     
-    args = parser.parse_args()
-    posts = read_json_file(args.path)
-    data = organize_data(posts, args.social_network)
-    save_to_csv(data, args.social_network)
+    parser.add_argument(
+        "--since",
+        type=str,
+        help="Start date in the format YYYY-MM-DD",
+        required=True
+    )
+
+    parser.add_argument(
+        "--until",
+        type=str,
+        help="End date in the format YYYY-MM-DD",
+        required=True
+    )
     
+    args = parser.parse_args()
+    
+    main(args.since, args.until)
