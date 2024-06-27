@@ -1,4 +1,4 @@
-import pandas as pd
+import csv
 import json
 import argparse
 from enum import Enum
@@ -21,28 +21,27 @@ class SocialNetwork(Enum):
             metadata = history.get('metadata', {})
             new_row = new_row_base.copy()
             new_row.update({
-                'postUrl': body.get('postUrl', ''),
-                'authorName': body.get('authorName', ''),
-                'authorNickName': body.get('authorNickName', ''),
+                'Name': body.get('authorName', ''),
+                'Username': body.get('authorNickName', ''),
+                'Tweet ID (click to view url)': body.get('statusId', ''),
+                'Retweets': metadata.get('stats', {}).get('share', 0),
+                'Comments': metadata.get('stats', {}).get('comment', 0),
+                'Favorites': metadata.get('stats', {}).get('like', 0),
+                'Is Retweet?': 'no', #not found in the data
+                'Date': body.get('timestamp', {}).get('$date', ''),
+                'Tweet Text': body.get('text', ''),
+                'Author Followers': body.get('authorFollowers', 0),
+                'Author Friends': body.get('authorFriendsCount', 0), # Apparently this is what the 'Favorites' field does.
+                'Author Favorites': metadata.get('stats', {}).get('like', 0),
+                'Author Statuses': body.get('statuses', 0),
+                'Author Bio': (body.get('authorBio') or '').replace('\n', ' '),
+                'Author Image': body.get('authorImage', ''),
+                'Author Location': body.get('locationName', ''),
+                'Author Verified': 'no', #not found in the data
+                'Tweet Source': body.get('source', ''),
                 'authorUrl': body.get('authorUrl', ''),
                 'authorId': body.get('authorId', ''),
-                'timestamp': body.get('timestamp', {}).get('$date', ''),
-                'text': body.get('text', ''),
-                'authorImage': body.get('authorImage', ''),
-                'locationName': body.get('locationName', ''),
-                'authorBio': (body.get('authorBio') or '').replace('\n', ' '),
-                'authorFriendsCount': body.get('authorFriendsCount', 0),
-                'statuses': body.get('statuses', 0),
-                'statusId': body.get('statusId', ''),
-                'source': body.get('source', ''),
-                'replyToUserId': body.get('replyToUserId', ''),
-                'replyToStatusId': body.get('replyToStatusId', ''),
-                'authorFollowers': body.get('authorFollowers', 0),
-                'authorFollowing': body.get('authorFollowing', 0),
-                'commentCount': metadata.get('stats', {}).get('comment', 0),
-                'likeCount': metadata.get('stats', {}).get('like', 0),
-                'seenCount': metadata.get('stats', {}).get('seen', 0),
-                'shareCount': metadata.get('stats', {}).get('share', 0),
+                'Status URL': body.get('postUrl', ''),
             })
             return new_row
         if self == self.__class__.TIKTOK:
@@ -132,22 +131,28 @@ def organize_data(posts: dict, social_network: SocialNetwork):
     """Organize data to be saved in a csv file"""
     
     data = []
+    count = 0
     for post in posts:
         new_row_base = {
-            'postId': post['postId'],
+            'id': count,
         }
         history = post['postHistory'][-1]
         new_row = social_network.get_data(new_row_base, history)
         data.append(new_row)
+        count += 1
         
     return data
 
 
-def save_to_csv(data: list, SocialNetwork: SocialNetwork):
-    """Write data to a csv file."""
-
-    df = pd.DataFrame(data)
-    df.to_csv(f'{SocialNetwork.value}.csv', index=False)
+def save_to_csv(data: list, social_network: SocialNetwork):
+    """Write data to a csv file using csv module."""
+    
+    filename = f'{social_network.value}.csv'
+    with open(filename, mode='w', newline='', encoding='utf-8') as file:
+        writer = csv.DictWriter(file, fieldnames=data[0].keys())
+        writer.writeheader()
+        for row in data:
+            writer.writerow(row)
 
 
 if __name__ == '__main__':
