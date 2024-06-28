@@ -53,14 +53,6 @@ def query_mongodb(client: MongoClient, database: str, collection: str, query: di
     return [document for document in results]
 
 
-def save_data_to_json(data: list, filename: str) -> None:
-    """Saves a list of data to a JSON file."""
-    
-    with open(filename, "w") as file:
-        json.dump(data, file, indent=4, default=str)
-    print("Dados salvos em JSON.")
-
-
 class SocialNetwork(Enum):
     """Enum class to represent the social network to be converted."""
 
@@ -109,66 +101,48 @@ class SocialNetwork(Enum):
             return new_row
         if self == self.__class__.TIKTOK:
             new_row.update({
-                'postUrl': body.get('postUrl', ''),
-                'authorName': body.get('authorName', ''),
-                'authorUrl': body.get('authorUrl', ''),
-                'authorId': body.get('authorId', ''),
-                'timestamp': body.get('timestamp', {}).get('$date', ''),
-                'text': body.get('text', ''),
-                'tagId': body.get('tagId', ''),
-                'tagName': body.get('tagName', ''),
-                'musicId': body.get('musicId', ''),
-                'musicName': body.get('musicName', ''),
-                'musicAuthor': body.get('musicAuthor', ''),
-                'authorFollowing': body.get('authorFollowing', 0),
-                'authorFollowers': body.get('authorFollowers', 0),
-                'authorHeart': body.get('authorHeart', 0),
-                'authorVideo': body.get('authorVideo', 0),
-                'authorDigg': body.get('authorDigg', 0),
-                'authorBio': (body.get('authorBio') or '').replace('\n', ' '),
-                'authorVerified': body.get('authorVerified', False),
-                'commentUrl': body.get('commentUrl', ''),
-                'commentCount': metadata.get('stats', {}).get('comment', 0),
-                'likeCount': metadata.get('stats', {}).get('like', 0),
-                'seenCount': metadata.get('stats', {}).get('seen', 0),
-                'shareCount': metadata.get('stats', {}).get('share', 0),
+                'Name (click to view profile)': body.get('authorName', ''),
+                'Unique ID': body.get('authorNickName', ''),
+                'Date': timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+                'Description': body.get('text', ''),
+                'Digg count':'' , # not found in the data
+                'Share count': metadata.get('stats', {}).get('share', 0),
+                'Play count': metadata.get('stats', {}).get('seen', 0),
+                'Comment count': metadata.get('stats', {}).get('comment', 0),
+                'Music': body.get('musicName', ''),
+                'Author Following count': body.get('authorFollowing', 0),
+                'Author Follower count': body.get('authorFollowers', 0),
+                'Author Heart count': body.get('authorHeart', 0),
+                'Author Video count': body.get('authorVideo', 0),
+                'Author Digg count':body.get('authorDigg', 0),
+                'Video link': body.get('postUrl', ''),
+                'Author URL': body.get('authorUrl', ''),
             })
             return new_row
         if self == self.__class__.INSTAGRAM:
             new_row.update({
-                'postUrl': body.get('postUrl', ''),
-                'authorName': body.get('authorName', ''),
-                'authorNickName': body.get('authorNickName', ''),
-                'authorUrl': body.get('authorUrl', ''),
-                'authorId': body.get('authorId', ''),
-                'timestamp': body.get('timestamp', {}).get('$date', ''),
-                'text': (body.get('text') or '').replace('\n', ' '),
-                "authorImage": body.get('authorImage', ''),
-                "reply": body.get('reply', ''),
-                "shortcode": body.get('shortcode', ''),
-                "isVideo": body.get('isVideo', False),
-                'productType': body.get('productType', ''),
-                'isSponsored': body.get('isSponsored', False),
-                'locationName': body.get('locationName', ''),
-                'media': body.get('media', ''),
-                'commentCount': metadata.get('stats', {}).get('comment', 0),
-                'likeCount': metadata.get('stats', {}).get('like', 0),
-                'seenCount': metadata.get('stats', {}).get('seen', 0),
+                'Shortcode': body.get('shortcode', ''),
+                'Username': body.get('authorNickName', ''),
+                'Profile ID': body.get('authorId', ''),
+                'Media Type': body.get('productType', ''),
+                'Video View Count': metadata.get('stats', {}).get('seen', 0),
+                'Likes': metadata.get('stats', {}).get('like', 0),
+                'Comments': metadata.get('stats', {}).get('comment', 0),
+                'Date created': timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+                'Caption': (body.get('text') or '').replace('\n', ' '),
+                'URL': body.get('postUrl', ''),
             })    
             return new_row
         if self == self.__class__.FACEBOOK:
             new_row.update({
-                'postUrl': body.get('postUrl', ''),
-                'authorName': body.get('authorName', ''),
-                'authorUrl': body.get('authorUrl', ''),
-                'authorId': body.get('authorId', ''),
-                'timestamp': body.get('timestamp', {}).get('$date', ''),
-                'text': body.get('text', ''),
-                'commentCount': metadata.get('stats', {}).get('comment', 0),
-                'likeCount': metadata.get('stats', {}).get('like', 0),
-                'seenCount': metadata.get('stats', {}).get('seen', 0),
-                'shareCount': metadata.get('stats', {}).get('share', 0),
-                'reactionCount': metadata.get('stats', {}).get('reaction', 0),
+                'Name (click to view profile)': body.get('authorName', ''),
+                'Profile ID': body.get('authorId', ''),
+                'Date': timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+                'Likes': metadata.get('stats', {}).get('like', 0),
+                'Stars': '', # not found in the data
+                'Comment': body.get('text', ''),
+                'URL': body.get('postUrl', ''),
+                'Profile Image':'', # not found in the data
             })
             return new_row
         raise ValueError(f"Rede social não suportada: {self.value}")
@@ -181,14 +155,25 @@ def organize_data(posts: dict, social_network: SocialNetwork) -> list:
     count = 0
     for post in posts:
         new_row_base = {
-            'id': count,
+            '': count,
         }
+        if social_network == SocialNetwork.INSTAGRAM: new_row_base.update({'ID': post['postId']})    
+        if social_network == SocialNetwork.TIKTOK: new_row_base.update({'Video ID': post['postId']})
+        
         history = post['postHistory'][-1]
         new_row = social_network.get_data(new_row_base, history)
         data.append(new_row)
         count += 1
         
     return data
+
+
+def save_to_json(data: list, filename: str) -> None:
+    """Saves a list of data to a JSON file."""
+    
+    with open(filename, "w") as file:
+        json.dump(data, file, indent=4, default=str)
+    print("Dados salvos em JSON.")
 
 
 def save_to_csv(data: list, file_name: str):
@@ -220,7 +205,6 @@ def main(social_network: SocialNetwork, since_date_str: str, until_date_str: str
         raise ValueError("Start date must be before end date.")
     
     load_dotenv()
-
     SSH_HOST = env_variable("SSH_HOST")
     SSH_USER = env_variable("SSH_USER")
     SSH_PRIVATE_KEY = env_variable("SSH_PRIVATE_KEY")
