@@ -1,28 +1,53 @@
 # Convert_extraction_in_csv
 
-This script is used to convert the extraction of the data from the JSONs into a CSV file. The extraction is done using the `pandas` library.
+Esse script foi desenvolvido para pegar dados do MongoDB a partir de um intervalo de tempo e transformar em um arquivo CSV.
 
-## Usage
+## Instalação
 
-To use this script, you need to have the following libraries installed:
-- pandas
-
-```bash
-pip install pandas
-```
-
-To run the script, you need to run the following command:
+Para instalar as dependências do projeto, execute o comando abaixo:
 
 ```bash
-python script.py <path_to_json> <social_network>
+pip install -r requirements.txt
 ```
 
-Where:
-- `<path_to_json>` is the path to the JSON file that contains the data to be extracted.
-- `<social_network>` is the social network that the JSON file contains. It can be one of the following:
-  - `twitter`
-  - `instagram`
-  - `facebook`
-  - `tiktok`
+## Configuração
 
-The csv file will be saved in the same directory as the script.
+Para configurar o script, é necessário criar um arquivo `.env` na raiz do projeto. As variáveis ​​necessárias estão listadas no arquivo .env.example.
+Para configurar o projeto:
+
+1. Copie o arquivo `.env.example` para um novo arquivo chamado `.env`:
+  
+```bash
+  cp .env.example .env
+```
+
+2. Abra o arquivo `.env` e preencha as variáveis ​​de ambiente com seus valores:
+  
+```bash
+SSH_HOST="IP do servidor"
+SSH_USER="Usuário do servidor"
+SSH_PRIVATE_KEY="Caminho para a chave privada"
+SSH_PASSPHRASE="Frase secreta da chave privada"
+MONGO_CONNECTION_STRING="String de conexão do MongoDB"
+MONGO_DATABASE="Nome do banco de dados"
+```
+
+
+## Utilização
+
+Para utilizar o script, execute o comando abaixo:
+
+```bash
+python download_extractions.py <SocialNetwork> --inicio AAAA-MM-DD --fim AAAA-MM-DD
+```
+Onde:
+- `<SocialNetwork>`: Rede social que deseja baixar os dados. Ex: `twitter`, `facebook`, `instagram`, `tiktok`.
+- `--inicio`: Data de início do intervalo de tempo que deseja baixar os dados.
+- `--fim`: Data de fim do intervalo de tempo que deseja baixar os dados.
+
+## Exemplo
+
+```bash
+python download_extractions.py twitter --inicio 2024-06-24 --fim 2024-06-27
+```
+O comando acima irá baixar os dados do Twitter no intervalo de tempo de 24/06/2024 a 27/06/2024. Note que a data deve ser no formato AAAA-MM-DD e a data de início deve ser menor que a data de fim.

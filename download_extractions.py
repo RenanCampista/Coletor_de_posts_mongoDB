@@ -209,7 +209,7 @@ def env_variable(var_name: str) -> str:
     return var_value
 
 
-def main(since_date_str: str, until_date_str: str):
+def main(social_network: SocialNetwork, since_date_str: str, until_date_str: str):
     """Main function to download data from MongoDB and save it to a csv file."""
     
     since_date = datetime.datetime.strptime(since_date_str + " 00:00:00", "%Y-%m-%d %H:%M:%S")
@@ -226,7 +226,7 @@ def main(since_date_str: str, until_date_str: str):
     SSH_PASSPHRASE = env_variable("SSH_PASSPHRASE")
     MONGO_CONNECTION_STRING = env_variable("MONGO_CONNECTION_STRING")
     MONGO_DATABASE = env_variable("MONGO_DATABASE")
-    MONGO_COLLECTION = env_variable("MONGO_COLLECTION")
+    MONGO_COLLECTION = f"{social_network.value}_posts"
 
     SSH_COMMAND = [
         "sudo", "ssh",
@@ -276,18 +276,18 @@ if __name__ == "__main__":
     )
     
     parser.add_argument(
-        "--since",
+        "--inicio",
         type=str,
         help="Start date in the format YYYY-MM-DD",
         required=True
     )
 
     parser.add_argument(
-        "--until",
+        "--fim",
         type=str,
         help="End date in the format YYYY-MM-DD",
         required=True
     )
     
     args = parser.parse_args()
-    main(args.since, args.until)
+    main(args.social_network, args.inicio, args.fim)
