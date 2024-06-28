@@ -1,7 +1,6 @@
 from pymongo import MongoClient, errors
 from dotenv import load_dotenv
-from datetime import datetime
-from datetime import datetime
+import datetime
 from enum import Enum
 import subprocess
 import argparse
@@ -15,7 +14,8 @@ def establish_ssh_tunnel(ssh_command: list, ssh_passphrase: str) -> subprocess.P
     """Establishes an SSH tunnel using a given command and passphrase. """
     
     print("Establishing SSH tunnel...")
-    ssh_process = subprocess.Popen(ssh_command, stdin=subprocess.PIPE)
+    #ssh_process = subprocess.Popen(ssh_command, stdin=subprocess.PIPE)
+    ssh_process = subprocess.Popen(ssh_command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     ssh_process.communicate(input=ssh_passphrase.encode())
     time.sleep(5)  # Wait to ensure the tunnel is ready
     print("SSH tunnel established.")
@@ -61,10 +61,16 @@ class SocialNetwork(Enum):
         return self.value
     
     def get_data(self, new_row_base, history) -> dict:
+        body = history['body']
+        metadata = history.get('metadata', {})
+        new_row = new_row_base.copy()
+
+        # Verify if the timestamp is a datetime object
+        timestamp = body.get('timestamp', datetime.datetime.now())
+        if not isinstance(timestamp, datetime.datetime):
+            timestamp = datetime.datetime.now()
+            
         if self == self.__class__.TWITTER:
-            body = history['body']
-            metadata = history.get('metadata', {})
-            new_row = new_row_base.copy()
             new_row.update({
                 'Name': body.get('authorName', ''),
                 'Username': body.get('authorNickName', ''),
@@ -72,17 +78,17 @@ class SocialNetwork(Enum):
                 'Retweets': metadata.get('stats', {}).get('share', 0),
                 'Comments': metadata.get('stats', {}).get('comment', 0),
                 'Favorites': metadata.get('stats', {}).get('like', 0),
-                'Is Retweet?': 'no', #not found in the data
-                'Date': body.get('timestamp', {}).get('$date', ''),
+                'Is Retweet?': 'no',  # not found in the data
+                'Date': timestamp.strftime('%Y-%m-%d %H:%M:%S'),
                 'Tweet Text': body.get('text', ''),
                 'Author Followers': body.get('authorFollowers', 0),
-                'Author Friends': body.get('authorFriendsCount', 0), # Apparently this is what the 'Favorites' field does.
+                'Author Friends': body.get('authorFriendsCount', 0),  # Apparently this is what the 'Favorites' field does.
                 'Author Favorites': metadata.get('stats', {}).get('like', 0),
                 'Author Statuses': body.get('statuses', 0),
                 'Author Bio': (body.get('authorBio') or '').replace('\n', ' '),
                 'Author Image': body.get('authorImage', ''),
                 'Author Location': body.get('locationName', ''),
-                'Author Verified': 'no', #not found in the data
+                'Author Verified': 'no',  # not found in the data
                 'Tweet Source': body.get('source', ''),
                 'authorUrl': body.get('authorUrl', ''),
                 'authorId': body.get('authorId', ''),
@@ -90,9 +96,6 @@ class SocialNetwork(Enum):
             })
             return new_row
         if self == self.__class__.TIKTOK:
-            body = history['body']
-            metadata = history.get('metadata', {})
-            new_row = new_row_base.copy()
             new_row.update({
                 'postUrl': body.get('postUrl', ''),
                 'authorName': body.get('authorName', ''),
@@ -120,9 +123,6 @@ class SocialNetwork(Enum):
             })
             return new_row
         if self == self.__class__.INSTAGRAM:
-            body = history['body']
-            metadata = history.get('metadata', {})
-            new_row = new_row_base.copy()
             new_row.update({
                 'postUrl': body.get('postUrl', ''),
                 'authorName': body.get('authorName', ''),
@@ -145,9 +145,6 @@ class SocialNetwork(Enum):
             })    
             return new_row
         if self == self.__class__.FACEBOOK:
-            body = history['body']
-            metadata = history.get('metadata', {})
-            new_row = new_row_base.copy()
             new_row.update({
                 'postUrl': body.get('postUrl', ''),
                 'authorName': body.get('authorName', ''),
@@ -204,8 +201,8 @@ def env_variable(var_name: str) -> str:
 def main(since_date_str: str, until_date_str: str):
     """Main function to download data from MongoDB and save it to a csv file."""
     
-    since_date = datetime.strptime(since_date_str, "%Y-%m-%d")
-    until_date = datetime.strptime(until_date_str, "%Y-%m-%d")
+    since_date = datetime.datetime.strptime(since_date_str, "%Y-%m-%d")
+    until_date = datetime.datetime.strptime(until_date_str, "%Y-%m-%d")
     
     if since_date > until_date:
         raise ValueError("Start date must be before end date.")
@@ -228,13 +225,13 @@ def main(since_date_str: str, until_date_str: str):
         "-f", "-N",
         "-o", "TCPKeepAlive=yes",
         "-o", "ServerAliveInterval=60",
-        "-L", f"27018:localhost:27018",
+        "-L", f"27018:localhost:27017",
         "-i", SSH_PRIVATE_KEY,
         f"{SSH_USER}@{SSH_HOST}"
     ]
 
-    since_date = since_date.replace(hour=0, minute=0, second=0)
-    until_date = until_date.replace(hour=23, minute=59, second=59)
+    since_date = datetime.datetime.strptime(since_date_str + " 00:00:00", "%Y-%m-%d %H:%M:%S")
+    until_date = datetime.datetime.strptime(until_date_str + " 23:59:59", "%Y-%m-%d %H:%M:%S")
 
     QUERY = {
         "createdAt": {
@@ -288,5 +285,4 @@ if __name__ == "__main__":
     )
     
     args = parser.parse_args()
-    
     main(args.since, args.until)
