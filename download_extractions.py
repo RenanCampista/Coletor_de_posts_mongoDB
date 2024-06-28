@@ -11,14 +11,16 @@ import os
 
 
 def establish_ssh_tunnel(ssh_command: list, ssh_passphrase: str) -> subprocess.Popen:
-    """Establishes an SSH tunnel using a given command and passphrase."""
+    """Establishes an SSH tunnel using a given command and passphrase with sshpass."""
+    
+    # Prepend the sshpass command and its options to the original ssh command
+    sshpass_command = ['sshpass', '-p', ssh_passphrase] + ssh_command
     
     try:
-        print("Establishing SSH tunnel...")
-        ssh_process = subprocess.Popen(ssh_command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        ssh_process.stdin.write(f"{ssh_passphrase}\n".encode())
-        time.sleep(1)
+        print("Establishing SSH tunnel with sshpass...")
+        ssh_process = subprocess.Popen(sshpass_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         print("SSH tunnel established.")
+        time.sleep(3) # Wait for the tunnel to be established
     except subprocess.TimeoutExpired:
         print("SSH command timed out. Tunnel may not be established.")
         ssh_process.kill()
