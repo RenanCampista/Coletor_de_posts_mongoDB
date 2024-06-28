@@ -202,6 +202,8 @@ def env_variable(var_name: str) -> str:
 
 
 def main(since_date_str: str, until_date_str: str):
+    """Main function to download data from MongoDB and save it to a csv file."""
+    
     since_date = datetime.strptime(since_date_str, "%Y-%m-%d")
     until_date = datetime.strptime(until_date_str, "%Y-%m-%d")
     
@@ -245,6 +247,7 @@ def main(since_date_str: str, until_date_str: str):
         ssh_process = establish_ssh_tunnel(SSH_COMMAND, SSH_PASSPHRASE)
         client = connect_to_mongodb(MONGO_CONNECTION_STRING)
         data = query_mongodb(client, MONGO_DATABASE, MONGO_COLLECTION, QUERY)
+        print(f"Found {len(data)} posts.")
         data = organize_data(data, args.social_network)
         save_to_csv(data, args.social_network)
     except errors.ServerSelectionTimeoutError as err:
