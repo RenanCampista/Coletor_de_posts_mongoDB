@@ -1,6 +1,6 @@
 from pymongo import MongoClient, errors
 from dotenv import load_dotenv
-import datetime
+from datetime import datetime
 from enum import Enum
 import subprocess
 import argparse
@@ -78,9 +78,9 @@ class SocialNetwork(Enum):
         new_row = new_row_base.copy()
 
         # Verify if the timestamp is a datetime object
-        timestamp = body.get('timestamp', datetime.datetime.now())
-        if not isinstance(timestamp, datetime.datetime):
-            timestamp = datetime.datetime.now()
+        timestamp = body.get('timestamp', datetime.now())
+        if not isinstance(timestamp, datetime):
+            timestamp = datetime.now()
             
         if self == self.__class__.TWITTER:
             new_row.update({
@@ -213,8 +213,8 @@ def env_variable(var_name: str) -> str:
 def main(social_network: SocialNetwork, since_date_str: str, until_date_str: str):
     """Main function to download data from MongoDB and save it to a csv file."""
     
-    since_date = datetime.datetime.strptime(since_date_str + " 00:00:00", "%Y-%m-%d %H:%M:%S")
-    until_date = datetime.datetime.strptime(until_date_str + " 23:59:59", "%Y-%m-%d %H:%M:%S")
+    since_date = datetime.strptime(since_date_str + " 00:00:00", "%Y-%m-%d %H:%M:%S")
+    until_date = datetime.strptime(until_date_str + " 23:59:59", "%Y-%m-%d %H:%M:%S")
     
     if since_date > until_date:
         raise ValueError("Start date must be before end date.")
@@ -249,9 +249,9 @@ def main(social_network: SocialNetwork, since_date_str: str, until_date_str: str
     try:
         ssh_process = establish_ssh_tunnel(SSH_COMMAND, SSH_PASSPHRASE)
         client = connect_to_mongodb(MONGO_CONNECTION_STRING)
-        print(f"Iniciando busca por posts do {social_network.value} no período de {since_date_str} a {until_date_str} ...")
+        print(f"Iniciando consulta ao MongoDB para a rede social {social_network.value}...")
         data = query_mongodb(client, MONGO_DATABASE, MONGO_COLLECTION, QUERY)
-        print(f"Encontrado {len(data)}.")
+        print(f"Encontrado {len(data)} posts no intervalo de {since_date_str} a {until_date_str}.")
         data = organize_data(data, args.social_network)
         save_to_csv(data, f"{social_network.value}_posts_{since_date_str}_{until_date_str}.csv")
     except errors.ServerSelectionTimeoutError as err:
