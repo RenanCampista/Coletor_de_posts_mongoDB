@@ -11,13 +11,23 @@ import os
 
 
 def establish_ssh_tunnel(ssh_command: list, ssh_passphrase: str) -> subprocess.Popen:
-    """Establishes an SSH tunnel using a given command and passphrase. """
+    """Establishes an SSH tunnel using a given command and passphrase."""
     
-    print("Establishing SSH tunnel...")
-    ssh_process = subprocess.Popen(ssh_command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    ssh_process.communicate(input=ssh_passphrase.encode())
-    time.sleep(5) 
-    print("SSH tunnel established.")
+    try:
+        print("Establishing SSH tunnel...")
+        ssh_process = subprocess.Popen(ssh_command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        ssh_process.stdin.write(f"{ssh_passphrase}\n".encode())
+        time.sleep(1)
+        print("SSH tunnel established.")
+    except subprocess.TimeoutExpired:
+        print("SSH command timed out. Tunnel may not be established.")
+        ssh_process.kill()
+        raise 
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        ssh_process.kill()
+        raise  
+
     return ssh_process
 
 
