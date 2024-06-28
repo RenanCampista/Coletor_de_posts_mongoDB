@@ -14,10 +14,9 @@ def establish_ssh_tunnel(ssh_command: list, ssh_passphrase: str) -> subprocess.P
     """Establishes an SSH tunnel using a given command and passphrase. """
     
     print("Establishing SSH tunnel...")
-    #ssh_process = subprocess.Popen(ssh_command, stdin=subprocess.PIPE)
     ssh_process = subprocess.Popen(ssh_command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     ssh_process.communicate(input=ssh_passphrase.encode())
-    time.sleep(5)  # Wait to ensure the tunnel is ready
+    time.sleep(5) 
     print("SSH tunnel established.")
     return ssh_process
 
@@ -201,14 +200,11 @@ def env_variable(var_name: str) -> str:
 def main(since_date_str: str, until_date_str: str):
     """Main function to download data from MongoDB and save it to a csv file."""
     
-    since_date = datetime.datetime.strptime(since_date_str, "%Y-%m-%d")
-    until_date = datetime.datetime.strptime(until_date_str, "%Y-%m-%d")
+    since_date = datetime.datetime.strptime(since_date_str + " 00:00:00", "%Y-%m-%d %H:%M:%S")
+    until_date = datetime.datetime.strptime(until_date_str + " 23:59:59", "%Y-%m-%d %H:%M:%S")
     
     if since_date > until_date:
         raise ValueError("Start date must be before end date.")
-    
-    since_date = since_date.replace(hour=0, minute=0, second=0)
-    until_date = until_date.replace(hour=23, minute=59, second=59)
     
     load_dotenv()
 
@@ -221,20 +217,15 @@ def main(since_date_str: str, until_date_str: str):
     MONGO_COLLECTION = env_variable("MONGO_COLLECTION")
 
     SSH_COMMAND = [
-        "ssh",
+        "sudo", "ssh",
         "-f", "-N",
         "-o", "TCPKeepAlive=yes",
         "-o", "ServerAliveInterval=60",
-        "-L", f"27018:localhost:27018",
+        "-L", "27018:localhost:27018",
         "-i", SSH_PRIVATE_KEY,
         f"{SSH_USER}@{SSH_HOST}"
     ]
     
-    #sudo ssh -f -N -o TCPKeepAlive=yes -o ServerAliveInterval=60 -L 27018:localhost:27018 -i ssh_rsa_api_03_04_2024.key root@159.89.254.129
-
-    since_date = datetime.datetime.strptime(since_date_str + " 00:00:00", "%Y-%m-%d %H:%M:%S")
-    until_date = datetime.datetime.strptime(until_date_str + " 23:59:59", "%Y-%m-%d %H:%M:%S")
-
     QUERY = {
         "createdAt": {
             "$gte": since_date,
