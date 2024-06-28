@@ -225,10 +225,12 @@ def main(since_date_str: str, until_date_str: str):
         "-f", "-N",
         "-o", "TCPKeepAlive=yes",
         "-o", "ServerAliveInterval=60",
-        "-L", f"27018:localhost:27017",
+        "-L", f"27018:localhost:27018",
         "-i", SSH_PRIVATE_KEY,
         f"{SSH_USER}@{SSH_HOST}"
     ]
+    
+    #sudo ssh -f -N -o TCPKeepAlive=yes -o ServerAliveInterval=60 -L 27018:localhost:27018 -i ssh_rsa_api_03_04_2024.key root@159.89.254.129
 
     since_date = datetime.datetime.strptime(since_date_str + " 00:00:00", "%Y-%m-%d %H:%M:%S")
     until_date = datetime.datetime.strptime(until_date_str + " 23:59:59", "%Y-%m-%d %H:%M:%S")
