@@ -226,6 +226,7 @@ def main(social_network: SocialNetwork, since_date_str: str, until_date_str: str
     SSH_PRIVATE_KEY = env_variable("SSH_PRIVATE_KEY")
     SSH_PASSPHRASE = env_variable("SSH_PASSPHRASE")
     MONGO_CONNECTION_STRING = env_variable("MONGO_CONNECTION_STRING")
+    MONGO_PORT = int(env_variable("MONGO_PORT"))
     MONGO_DATABASE = env_variable("MONGO_DATABASE")
     MONGO_COLLECTION = f"{social_network.value}_posts"
 
@@ -234,7 +235,7 @@ def main(social_network: SocialNetwork, since_date_str: str, until_date_str: str
         "-f", "-N",
         "-o", "TCPKeepAlive=yes",
         "-o", "ServerAliveInterval=60",
-        "-L", "27018:localhost:27018",
+        "-L", f"{MONGO_PORT}:localhost:{MONGO_PORT}",
         "-i", SSH_PRIVATE_KEY,
         f"{SSH_USER}@{SSH_HOST}"
     ]

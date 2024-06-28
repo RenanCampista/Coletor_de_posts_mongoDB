@@ -29,6 +29,7 @@ SSH_USER="Usuário do servidor"
 SSH_PRIVATE_KEY="Caminho para a chave privada"
 SSH_PASSPHRASE="Frase secreta da chave privada"
 MONGO_CONNECTION_STRING="String de conexão do MongoDB"
+MONGO_PORT="Porta do MongoDB"
 MONGO_DATABASE="Nome do banco de dados"
 ```
 
