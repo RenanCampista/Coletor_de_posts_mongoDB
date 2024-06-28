@@ -17,16 +17,16 @@ def establish_ssh_tunnel(ssh_command: list, ssh_passphrase: str) -> subprocess.P
     sshpass_command = ['sshpass', '-p', ssh_passphrase] + ssh_command
     
     try:
-        print("Establishing SSH tunnel with sshpass...")
+        print("Estabelecendo túnel SSH com sshpass...")
         ssh_process = subprocess.Popen(sshpass_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        print("SSH tunnel established.")
+        print("Conexão SSH estabelecida.")
         time.sleep(3) # Wait for the tunnel to be established
     except subprocess.TimeoutExpired:
-        print("SSH command timed out. Tunnel may not be established.")
+        print("O túnel SSH não pôde ser estabelecido. O tempo limite expirou.")
         ssh_process.kill()
         raise 
     except Exception as e:
-        print(f"An error occurred: {e}")
+        print(f"Erro ao estabelecer o túnel SSH: {e}")
         ssh_process.kill()
         raise  
 
@@ -36,15 +36,16 @@ def establish_ssh_tunnel(ssh_command: list, ssh_passphrase: str) -> subprocess.P
 def connect_to_mongodb(connection_string: str) -> MongoClient:
     """Connects to a MongoDB database using a given connection string."""
     
-    print("Connecting to MongoDB...")
+    print("Conectando ao MongoDB...")
     client = MongoClient(connection_string, serverSelectionTimeoutMS=20000)
     client.admin.command('ping')  # Force a server selection to check the connection
-    print("MongoDB connection established.")
+    print("Conexão com o MongoDB estabelecida.")
     return client
 
 
 def query_mongodb(client: MongoClient, database: str, collection: str, query: dict) -> list:
     """Queries a MongoDB collection and returns the results."""
+    
     
     db = client[database]
     collection = db[collection]
@@ -57,7 +58,7 @@ def save_data_to_json(data: list, filename: str) -> None:
     
     with open(filename, "w") as file:
         json.dump(data, file, indent=4, default=str)
-    print("Data successfully downloaded!")
+    print("Dados salvos em JSON.")
 
 
 class SocialNetwork(Enum):
@@ -170,7 +171,7 @@ class SocialNetwork(Enum):
                 'reactionCount': metadata.get('stats', {}).get('reaction', 0),
             })
             return new_row
-        raise ValueError(f"Invalid social network {self}.")
+        raise ValueError(f"Rede social não suportada: {self.value}")
 
 
 def organize_data(posts: dict, social_network: SocialNetwork) -> list:
@@ -190,22 +191,22 @@ def organize_data(posts: dict, social_network: SocialNetwork) -> list:
     return data
 
 
-def save_to_csv(data: list, social_network: SocialNetwork):
+def save_to_csv(data: list, file_name: str):
     """Write data to a csv file using csv module."""
     
-    filename = f'{social_network.value}.csv'
-    with open(filename, mode='w', newline='', encoding='utf-8') as file:
+    with open(file_name, mode='w', newline='', encoding='utf-8') as file:
         writer = csv.DictWriter(file, fieldnames=data[0].keys())
         writer.writeheader()
         for row in data:
             writer.writerow(row)
+    print(f"Arquivo {file_name} salvo com sucesso.")
 
 
 def env_variable(var_name: str) -> str:
     """Gets an environment variable or raises an exception if it is not set."""
     
     if not (var_value := os.getenv(var_name)):
-        raise ValueError(f"Environment variable {var_name} is required")
+        raise ValueError(f"Variável de ambiente {var_name} não definida. Verifique o arquivo .env.")
     return var_value
 
 
@@ -248,22 +249,23 @@ def main(social_network: SocialNetwork, since_date_str: str, until_date_str: str
     try:
         ssh_process = establish_ssh_tunnel(SSH_COMMAND, SSH_PASSPHRASE)
         client = connect_to_mongodb(MONGO_CONNECTION_STRING)
+        print(f"Iniciando busca por posts do {social_network.value} no período de {since_date_str} a {until_date_str} ...")
         data = query_mongodb(client, MONGO_DATABASE, MONGO_COLLECTION, QUERY)
-        print(f"Found {len(data)} posts.")
+        print(f"Encontrado {len(data)}.")
         data = organize_data(data, args.social_network)
-        save_to_csv(data, args.social_network)
+        save_to_csv(data, f"{social_network.value}_posts_{since_date_str}_{until_date_str}.csv")
     except errors.ServerSelectionTimeoutError as err:
         print(f"Erro de seleção de servidor ao conectar ao MongoDB: {err}")
     except Exception as e:
         print(f"Erro: {e}")
     finally:
-        print("Fechando o túnel SSH.")
+        print("Fechando o túnel SSH...")
         ssh_process.terminate()
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Download data from MongoDB and save it to a csv file.",
+        description="Baixa dados de uma rede social de um banco de dados MongoDB e salva em um arquivo CSV.",
         formatter_class=argparse.RawTextHelpFormatter,
     )
     
@@ -271,21 +273,20 @@ if __name__ == "__main__":
         "social_network",
         type=SocialNetwork,
         choices=SocialNetwork,
-        help="""Social network to convert file\n\n
-        Currently supported: twitter, tiktok, instagram, facebook""",
+        help="Rede social que deseja baixar os dados. Opções: twitter, tiktok, instagram, facebook."
     )
     
     parser.add_argument(
         "--inicio",
         type=str,
-        help="Start date in the format YYYY-MM-DD",
+        help="Data de início no formato AAAA-MM-DD",
         required=True
     )
 
     parser.add_argument(
         "--fim",
         type=str,
-        help="End date in the format YYYY-MM-DD",
+        help="Data de fim no formato AAAA-MM-DD",
         required=True
     )
     
