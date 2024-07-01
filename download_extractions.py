@@ -2,7 +2,7 @@ from pymongo import MongoClient, errors
 from dotenv import load_dotenv
 from datetime import datetime
 from enum import Enum
-import subprocess
+import pexpect
 import argparse
 import time
 import json
@@ -10,28 +10,26 @@ import csv
 import os
 
 
-def establish_ssh_tunnel(ssh_command: list, ssh_passphrase: str) -> subprocess.Popen:
-    """Establishes an SSH tunnel using a given command and passphrase with sshpass."""
-    
-    # Prepend the sshpass command and its options to the original ssh command
-    sshpass_command = ['sshpass', '-p', ssh_passphrase] + ssh_command
+def establish_ssh_tunnel(ssh_command: str, ssh_passphrase: str) -> pexpect.spawn:
+    """Establishes an SSH tunnel using a given command and passphrase with pexpect."""
     
     try:
-        print("Estabelecendo túnel SSH com sshpass...")
-        ssh_process = subprocess.Popen(sshpass_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        print("Estabelecendo túnel SSH com pexpect...")
+        ssh_process = pexpect.spawn(ssh_command, timeout=30)
+        
+        ssh_process.expect("Enter passphrase for key .*:")
+        print("Informando a passphrase...")
+        ssh_process.sendline(ssh_passphrase)
+        
+        time.sleep(3)  # Wait for the tunnel to be established
         print("Conexão SSH estabelecida.")
-        time.sleep(3) # Wait for the tunnel to be established
-    except subprocess.TimeoutExpired:
+        
+        return ssh_process
+    except pexpect.exceptions.TIMEOUT:
         print("O túnel SSH não pôde ser estabelecido. O tempo limite expirou.")
-        ssh_process.kill()
-        raise 
-    except Exception as e:
-        print(f"Erro ao estabelecer o túnel SSH: {e}")
-        ssh_process.kill()
-        raise  
-
-    return ssh_process
-
+        ssh_process.kill(9)
+        raise
+    
 
 def connect_to_mongodb(connection_string: str) -> MongoClient:
     """Connects to a MongoDB database using a given connection string."""
@@ -213,16 +211,8 @@ def main(social_network: SocialNetwork, since_date_str: str, until_date_str: str
     MONGO_PORT = int(env_variable("MONGO_PORT"))
     MONGO_DATABASE = env_variable("MONGO_DATABASE")
     MONGO_COLLECTION = f"{social_network.value}_posts"
-
-    SSH_COMMAND = [
-        "sudo", "ssh",
-        "-f", "-N",
-        "-o", "TCPKeepAlive=yes",
-        "-o", "ServerAliveInterval=60",
-        "-L", f"{MONGO_PORT}:localhost:{MONGO_PORT}",
-        "-i", SSH_PRIVATE_KEY,
-        f"{SSH_USER}@{SSH_HOST}"
-    ]
+    
+    SSH_COMMAND = f"sudo ssh -f -N -o TCPKeepAlive=yes -o ServerAliveInterval=60 -L {MONGO_PORT}:localhost:{MONGO_PORT} -i {SSH_PRIVATE_KEY} {SSH_USER}@{SSH_HOST}"
     
     QUERY = {
         "createdAt": {
