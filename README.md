@@ -1,4 +1,4 @@
-# Convert_extraction_in_csv
+# Coletor de posts do MongoDB
 
 Esse script foi desenvolvido para pegar dados do MongoDB a partir de um intervalo de tempo e transformar em um arquivo CSV.
 
@@ -33,6 +33,7 @@ MONGO_PORT="Porta do MongoDB"
 MONGO_DATABASE="Nome do banco de dados"
 ```
 
+Note que é necessário ter o arquivo de chave privada para acessar o servidor via SSH. O caminho deve ser colocado na variável `SSH_PRIVATE_KEY`. Portanto, se o arquivo estiver na mesma pasta do script, bastará colocar o nome do arquivo.
 
 ## Utilização
 
