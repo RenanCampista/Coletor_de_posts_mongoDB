@@ -221,10 +221,10 @@ def main(social_network: SocialNetwork, since_date_str: str, until_date_str: str
         }
     }
     
-    if args.tema:
+    if args.tema and isinstance(args.tema, str):
         QUERY["postHistory.metadata.collect.theme"] = args.tema
-        
-    if args.termo:
+
+    if args.termo and isinstance(args.termo, str):
         QUERY["postHistory.metadata.collect.terms"] = {"$all": [args.termo]}
 
     try:
@@ -246,14 +246,18 @@ def main(social_network: SocialNetwork, since_date_str: str, until_date_str: str
             return
         
         sucess_message = f"Encontrado {number_of_posts} posts no intervalo de {since_date_str} a {until_date_str}."
+        file_name = f"{social_network.value}_posts_{since_date_str}_{until_date_str}"
         if args.tema:
             sucess_message += f" Tema: {args.tema}."
+            file_name += f"_tema_{args.tema}"
         if args.termo:
             sucess_message += f" Termo: {args.termo}."
+            file_name += f"_termo_{args.termo}"
+        file_name += ".csv"
         print(sucess_message)        
         
         data = organize_data(data, args.social_network)
-        save_to_csv(data, f"{social_network.value}_posts_{since_date_str}_{until_date_str}.csv")
+        save_to_csv(data, file_name)
     except errors.ServerSelectionTimeoutError as err:
         print(f"Erro de seleção de servidor ao conectar ao MongoDB: {err}")
     except Exception as e:
