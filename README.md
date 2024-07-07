@@ -1,14 +1,16 @@
 # Coletor de posts do MongoDB
 
-Esse script foi desenvolvido para pegar dados do MongoDB a partir de um intervalo de tempo e transformar em um arquivo CSV.
+Este script foi desenvolvido para baixar dados do MongoDB a partir de um intervalo de tempo e transformá-los em arquivos CSV. 
 
 ## Instalação
 
-Para instalar as dependências do projeto, execute o comando abaixo:
+Para instalar as dependências do projeto, em um terminal execute o comando abaixo:
 
 ```bash
 pip install -r requirements.txt
 ```
+
+Obs: É necessário ter o Python instalado na máquina. Caso não tenha, acesse o link [Python](https://www.python.org/downloads/) para baixar e instalar.
 
 ## Configuração
 
@@ -53,3 +55,33 @@ Onde:
 python download_extractions.py twitter --inicio 2024-06-24 --fim 2024-06-27
 ```
 O comando acima irá baixar os dados do Twitter no intervalo de tempo de 24/06/2024 a 27/06/2024. Note que a data deve ser no formato AAAA-MM-DD e a data de início deve ser menor que a data de fim.
+
+## Adicionar filtros de busca
+É possível retornar postagens a partir de um tema ou termo específico. Os dois parâmetros abaixo são opcionais e podem ser utilizados separadamente ou em conjunto.
+
+### Filtro por tema
+Para filtrar as postagens por tema, adicione o parâmetro `--tema` seguido do tema desejado. Ex:
+
+```bash
+python download_extractions.py twitter --inicio 2024-06-24 --fim 2024-06-27 --tema 'clima'
+```
+O comando acima irá baixar os dados do Twitter no intervalo de tempo de 24/06/2024 a 27/06/2024 que contenham o tema "clima".
+
+### Filtro por termo
+Para filtrar as postagens por termo, adicione o parâmetro `--termo` seguido do termo desejado. Ex:
+
+```bash
+python download_extractions.py twitter --inicio 2024-06-24 --fim 2024-06-27 --termo 'chuva'
+```
+O comando acima irá baixar os dados do Twitter no intervalo de tempo de 24/06/2024 a 27/06/2024 que contenham o termo "chuva".
+
+
+## Usando os dois filtros juntos
+Para usar os dois filtros juntos, basta adicionar os dois parâmetros ao comando. Ex:
+
+```bash
+python download_extractions.py twitter --inicio 2024-06-24 --fim 2024-06-27 --tema 'clima' --termo 'chuva'
+```
+O comando acima irá baixar os dados do Twitter no intervalo de tempo de 24/06/2024 a 27/06/2024 que contenham o tema "clima" e o termo "chuva".
+
+Obs: Certifique-se de que o tema ou termo estão entre aspas simples. Além disso, quando usar os dois filtros juntos, garanta que o termo faz parte do tema.
