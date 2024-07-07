@@ -220,13 +220,38 @@ def main(social_network: SocialNetwork, since_date_str: str, until_date_str: str
             "$lte": until_date
         }
     }
+    
+    if args.tema:
+        QUERY["postHistory.metadata.collect.theme"] = args.tema
+        
+    if args.termo:
+        QUERY["postHistory.metadata.collect.terms"] = {"$all": [args.termo]}
 
     try:
         ssh_process = establish_ssh_tunnel(SSH_COMMAND, SSH_PASSPHRASE)
+        
         client = connect_to_mongodb(MONGO_CONNECTION_STRING)
         print(f"Iniciando consulta ao MongoDB para a rede social {social_network.value}...")
         data = query_mongodb(client, MONGO_DATABASE, MONGO_COLLECTION, QUERY)
-        print(f"Encontrado {len(data)} posts no intervalo de {since_date_str} a {until_date_str}.")
+        
+        number_of_posts = len(data)
+        
+        if number_of_posts == 0:
+            failed_message = f"Nenhum post encontrado no intervalo de {since_date_str} a {until_date_str}."
+            if args.tema:
+                failed_message += f" Tema: {args.tema}."
+            if args.termo:
+                failed_message += f" Termo: {args.termo}."
+            print(failed_message)
+            return
+        
+        sucess_message = f"Encontrado {number_of_posts} posts no intervalo de {since_date_str} a {until_date_str}."
+        if args.tema:
+            sucess_message += f" Tema: {args.tema}."
+        if args.termo:
+            sucess_message += f" Termo: {args.termo}."
+        print(sucess_message)        
+        
         data = organize_data(data, args.social_network)
         save_to_csv(data, f"{social_network.value}_posts_{since_date_str}_{until_date_str}.csv")
     except errors.ServerSelectionTimeoutError as err:
@@ -263,6 +288,20 @@ if __name__ == "__main__":
         type=str,
         help="Data de fim no formato AAAA-MM-DD",
         required=True
+    )
+    
+    parser.add_argument(
+        "--tema",
+        type=str,
+        help="Tema da pesquisa",
+        default=None
+    )
+    
+    parser.add_argument(
+        "--termo",
+        type=str,
+        help="Termo da pesquisa",
+        default=None
     )
     
     args = parser.parse_args()
