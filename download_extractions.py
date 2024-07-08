@@ -76,25 +76,25 @@ class SocialNetwork(Enum):
             new_row.update({
                 'Name': body.get('authorName', ''),
                 'Username': body.get('authorNickName', ''),
-                '"Tweet ID (click to view url)"': body.get('statusId', ''),
+                'Tweet ID (click to view url)': body.get('statusId', ''),
                 'Retweets': metadata.get('stats', {}).get('share', 0),
                 'Comments': metadata.get('stats', {}).get('comment', 0),
                 'Favorites': metadata.get('stats', {}).get('like', 0),
-                '"Is Retweet?"': 'no',  # not found in the data
+                'Is Retweet?': 'no',  # not found in the data
                 'Date': timestamp.strftime('%Y-%m-%d %H:%M:%S'),
-                '"Tweet Text"': body.get('text', ''),
-                '"Author Followers"': body.get('authorFollowers', 0),
-                '"Author Friends"': body.get('authorFriendsCount', 0),  # Apparently this is what the 'Favorites' field does.
-                '"Author Favorites"': metadata.get('stats', {}).get('like', 0),
-                '"Author Statuses"': body.get('statuses', 0),
-                '"Author Bio"': (body.get('authorBio') or '').replace('\n', ' '),
-                '"Author Image"': body.get('authorImage', ''),
-                '"Author Location"': body.get('locationName', ''),
-                '"Author Verified"': 'no',  # not found in the data
-                '"Tweet Source"': body.get('source', ''),
+                'Tweet Text': body.get('text', ''),
+                'Author Followers': body.get('authorFollowers', 0),
+                'Author Friends': body.get('authorFriendsCount', 0),  # Apparently this is what the 'Favorites' field does.
+                'Author Favorites': metadata.get('stats', {}).get('like', 0),
+                'Author Statuses': body.get('statuses', 0),
+                'Author Bio': (body.get('authorBio') or '').replace('\n', ' '),
+                'Author Image': body.get('authorImage', ''),
+                'Author Location': body.get('locationName', ''),
+                'Author Verified': 'no',  # not found in the data
+                'Tweet Source': body.get('source', ''),
                 # 'authorUrl': body.get('authorUrl', ''),
                 # 'authorId': body.get('authorId', ''),
-                '"Status URL"': body.get('postUrl', ''),
+                'Status URL': body.get('postUrl', ''),
             })
             return new_row
         if self == self.__class__.TIKTOK:
