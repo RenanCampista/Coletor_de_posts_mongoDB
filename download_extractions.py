@@ -183,7 +183,7 @@ def save_to_csv(data: list, file_name: str):
         writer.writeheader()
         for row in data:
             writer.writerow(row)
-    print(f"Arquivo {file_name} salvo com sucesso.")
+    print(f"Arquivo {os.path.basename(file_name)} salvo com sucesso.")
 
 
 def env_variable(var_name: str) -> str:
@@ -247,7 +247,7 @@ def main(social_network: SocialNetwork, since_date_str: str, until_date_str: str
             return
         
         sucess_message = f"Encontrado {number_of_posts} posts no intervalo de {since_date_str} a {until_date_str}."
-        file_name = f"{social_network.value}_posts_{since_date_str}_{until_date_str}"
+        file_name = f"{social_network.value}_{since_date_str}_{until_date_str}"
         if args.tema:
             sucess_message += f" Tema: {args.tema}."
             file_name += f"_tema_{args.tema}"
@@ -257,8 +257,16 @@ def main(social_network: SocialNetwork, since_date_str: str, until_date_str: str
         file_name += ".csv"
         print(sucess_message)        
         
-        data = organize_data(data, args.social_network)
-        save_to_csv(data, file_name)
+        data = organize_data(data, args.social_network)        
+
+        social_network_folder = args.social_network.value
+        folder_path = os.path.join(os.getcwd(), social_network_folder)
+
+        if not os.path.exists(folder_path):
+            os.makedirs(folder_path)
+
+        file_path = os.path.join(folder_path, file_name)
+        save_to_csv(data, file_path)
     except errors.ServerSelectionTimeoutError as err:
         print(f"Erro de seleção de servidor ao conectar ao MongoDB: {err}")
     except Exception as e:
