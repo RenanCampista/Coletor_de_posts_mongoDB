@@ -151,14 +151,15 @@ def organize_data(posts: dict, social_network: SocialNetwork) -> list:
     
     data = []
     count = 0
+
     for post in posts:
         new_row_base = {
             '': count,
-            '': '',
+            ' ': '',
         }
         if social_network == SocialNetwork.INSTAGRAM: new_row_base.update({'ID': post['postId']})    
         if social_network == SocialNetwork.TIKTOK: new_row_base.update({'Video ID': post['postId']})
-        
+                
         history = post['postHistory'][-1]
         new_row = social_network.get_data(new_row_base, history)
         data.append(new_row)
@@ -179,10 +180,18 @@ def save_to_csv(data: list, file_name: str):
     """Write data to a csv file using csv module."""
     
     with open(file_name, mode='w', newline='', encoding='utf-8') as file:
-        writer = csv.DictWriter(file, fieldnames=data[0].keys())
+        writer = csv.DictWriter(
+            f=file, 
+            fieldnames=data[0].keys(), 
+            quotechar='"', 
+            quoting=csv.QUOTE_NONNUMERIC,
+        )
+        
         writer.writeheader()
+        
         for row in data:
             writer.writerow(row)
+            
     print(f"Arquivo {os.path.basename(file_name)} salvo com sucesso.")
 
 
