@@ -221,7 +221,7 @@ def main(social_network: SocialNetwork, since_date_str: str, until_date_str: str
         print(f"Iniciando consulta ao MongoDB para a rede social {social_network.value}...")
         data = query_mongodb(client, env_variable("MONGO_DATABASE"), MONGO_COLLECTION, QUERY)
         if len(data) == 0:
-            failed_message = f"Nenhum post encontrado no intervalo de {since_date_str} a {until_date_str}."
+            failed_message = f"Nenhum resultado encontrado no intervalo de {since_date_str} a {until_date_str}."
             if args.tema:
                 failed_message += f" Tema: {args.tema}."
             if args.termo:
@@ -230,19 +230,16 @@ def main(social_network: SocialNetwork, since_date_str: str, until_date_str: str
             return
         
         data, num_results = organize_data(data, args.social_network, args.get_comments)   
-        sucess_message = f"Encontrado {num_results}"
-        if args.get_comments:
-            sucess_message += f" comentários no intervalo no intervalo de {since_date_str} a {until_date_str}."
-        else:
-            sucess_message += f" posts no intervalo de {since_date_str} a {until_date_str}."
-            if args.tema:
-                sucess_message += f" Tema: {args.tema}."
-                file_name += f"_tema_{args.tema}"
-            if args.termo:
-                sucess_message += f" Termo: {args.termo}."
-                file_name += f"_termo_{args.termo}"
-        file_name = f"{social_network.value}_{since_date_str}_{until_date_str}"
-        file_name += ".csv"
+        sucess_message = f"Encontrado {num_results} resultados no intervalo de {since_date_str} a {until_date_str}."
+        if args.tema and not args.get_comments:
+            sucess_message += f" Tema: {args.tema}."
+            file_name += f"_tema_{args.tema}"
+        if args.termo and not args.get_comments:
+            sucess_message += f" Termo: {args.termo}."
+            file_name += f"_termo_{args.termo}"
+        file_name = f"{social_network.value}"
+        file_name += f"_comments_{since_date_str}_{until_date_str}.csv" if args.get_comments else f"_posts_{since_date_str}_{until_date_str}.csv"
+
         print(sucess_message)        
              
         social_network_folder = args.social_network.value
