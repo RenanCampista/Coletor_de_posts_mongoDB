@@ -44,7 +44,6 @@ def connect_to_mongodb(connection_string: str) -> MongoClient:
 def query_mongodb(client: MongoClient, database: str, collection: str, query: dict) -> list:
     """Queries a MongoDB collection and returns the results."""
     
-    
     db = client[database]
     collection = db[collection]
     results = collection.find(query)
@@ -62,9 +61,10 @@ class SocialNetwork(Enum):
     def __str__(self):
         return self.value
     
-    def get_data(self, new_row_base, history) -> dict:
-        body = history['body']
-        metadata = history.get('metadata', {})
+    def get_posts(self, new_row_base, content) -> dict:
+        body = content['body']
+        metadata = content.get('metadata', {})
+        collect = metadata.get('collect', {})
         new_row = new_row_base.copy()
 
         # Verify if the timestamp is a datetime object
@@ -80,7 +80,7 @@ class SocialNetwork(Enum):
                 'Retweets': metadata.get('stats', {}).get('share', 0),
                 'Comments': metadata.get('stats', {}).get('comment', 0),
                 'Favorites': metadata.get('stats', {}).get('like', 0),
-                'Is Retweet?': 'no',  # not found in the data
+                'Is Retweet?': body.get('isRetweet', False),
                 'Date': timestamp.strftime('%Y-%m-%d %H:%M:%S'),
                 'Tweet Text': body.get('text', ''),
                 'Author Followers': body.get('authorFollowers', 0),
@@ -92,9 +92,7 @@ class SocialNetwork(Enum):
                 'Author Location': body.get('locationName', ''),
                 'Author Verified': 'no',  # not found in the data
                 'Tweet Source': body.get('source', ''),
-                # 'authorUrl': body.get('authorUrl', ''),
-                # 'authorId': body.get('authorId', ''),
-                'Status URL': body.get('postUrl', ''),
+                'Status URL': body.get('postUrl', '') or collect.get('commentUrl', ''),
             })
             return new_row
         if self == self.__class__.TIKTOK:
@@ -145,27 +143,45 @@ class SocialNetwork(Enum):
             return new_row
         raise ValueError(f"Rede social não suportada: {self.value}")
 
+    def get_comments(self, new_row_base, comments, count)-> list:
+        comments_list = []
+        for comment in comments:
+            new_row_base = {
+                '': count,
+                ' ': '',
+            }
+            # Tweets (comments) are considered posts
+            comments_list.append(self.get_posts(new_row_base, comment))
+            count += 1
+        return comments_list
+            
 
-def organize_data(posts: dict, social_network: SocialNetwork) -> list:
+
+def organize_data(posts: dict, social_network: SocialNetwork, get_comments: bool = False) -> tuple[list, int]:
     """Organize data to be saved in a csv file"""
     
     data = []
     count = 0
 
     for post in posts:
-        new_row_base = {
-            '': count,
-            ' ': '',
-        }
-        if social_network == SocialNetwork.INSTAGRAM: new_row_base.update({'ID': post['postId']})    
-        if social_network == SocialNetwork.TIKTOK: new_row_base.update({'Video ID': post['postId']})
-                
-        history = post['postHistory'][-1]
-        new_row = social_network.get_data(new_row_base, history)
-        data.append(new_row)
-        count += 1
-        
-    return data
+        new_row_base = {}
+        if get_comments:
+            content = post['comments']
+            new_row = social_network.get_comments(new_row_base, content, count)
+            data += new_row
+            count += len(new_row)
+        else:
+            new_row_base = {
+                '': count,
+                ' ': '',
+            }
+            if social_network == SocialNetwork.INSTAGRAM: new_row_base.update({'ID': post['postId']})    
+            if social_network == SocialNetwork.TIKTOK: new_row_base.update({'Video ID': post['postId']})        
+            content = post['postHistory'][-1]
+            new_row = social_network.get_posts(new_row_base, content)
+            data.append(new_row)
+            count += 1
+    return data, count
 
 
 def save_to_json(data: list, filename: str) -> None:
@@ -203,7 +219,7 @@ def env_variable(var_name: str) -> str:
     return var_value
 
 
-def main(social_network: SocialNetwork, since_date_str: str, until_date_str: str):
+def main(social_network: SocialNetwork, since_date_str: str, until_date_str: str, get_comments: bool):
     """Main function to download data from MongoDB and save it to a csv file."""
     
     since_date = datetime.strptime(since_date_str + " 00:00:00", "%Y-%m-%d %H:%M:%S")
@@ -220,7 +236,10 @@ def main(social_network: SocialNetwork, since_date_str: str, until_date_str: str
     MONGO_CONNECTION_STRING = env_variable("MONGO_CONNECTION_STRING")
     MONGO_PORT = int(env_variable("MONGO_PORT"))
     MONGO_DATABASE = env_variable("MONGO_DATABASE")
-    MONGO_COLLECTION = f"{social_network.value}_posts"
+    if get_comments:
+        MONGO_COLLECTION = f"{social_network.value}_comment"
+    else:
+        MONGO_COLLECTION = f"{social_network.value}_postsV2"
     
     SSH_COMMAND = f"sudo ssh -f -N -o TCPKeepAlive=yes -o ServerAliveInterval=60 -L {MONGO_PORT}:localhost:{MONGO_PORT} -i {SSH_PRIVATE_KEY} {SSH_USER}@{SSH_HOST}"
     
@@ -231,22 +250,18 @@ def main(social_network: SocialNetwork, since_date_str: str, until_date_str: str
         }
     }
     
-    if args.tema and isinstance(args.tema, str):
+    if args.tema and isinstance(args.tema, str) and not args.get_comments:
         QUERY["postHistory.metadata.collect.theme"] = args.tema
 
-    if args.termo and isinstance(args.termo, str):
+    if args.termo and isinstance(args.termo, str) and not args.get_comments:
         QUERY["postHistory.metadata.collect.terms"] = {"$all": [args.termo]}
 
     try:
         ssh_process = establish_ssh_tunnel(SSH_COMMAND, SSH_PASSPHRASE)
-        
         client = connect_to_mongodb(MONGO_CONNECTION_STRING)
         print(f"Iniciando consulta ao MongoDB para a rede social {social_network.value}...")
         data = query_mongodb(client, MONGO_DATABASE, MONGO_COLLECTION, QUERY)
-        
-        number_of_posts = len(data)
-        
-        if number_of_posts == 0:
+        if len(data) == 0:
             failed_message = f"Nenhum post encontrado no intervalo de {since_date_str} a {until_date_str}."
             if args.tema:
                 failed_message += f" Tema: {args.tema}."
@@ -255,25 +270,26 @@ def main(social_network: SocialNetwork, since_date_str: str, until_date_str: str
             print(failed_message)
             return
         
-        sucess_message = f"Encontrado {number_of_posts} posts no intervalo de {since_date_str} a {until_date_str}."
+        data, num_results = organize_data(data, args.social_network, args.get_comments)   
+        sucess_message = f"Encontrado {num_results}"
+        if args.get_comments:
+            sucess_message += f" comentários no intervalo no intervalo de {since_date_str} a {until_date_str}."
+        else:
+            sucess_message += f" posts no intervalo de {since_date_str} a {until_date_str}."
+            if args.tema:
+                sucess_message += f" Tema: {args.tema}."
+                file_name += f"_tema_{args.tema}"
+            if args.termo:
+                sucess_message += f" Termo: {args.termo}."
+                file_name += f"_termo_{args.termo}"
         file_name = f"{social_network.value}_{since_date_str}_{until_date_str}"
-        if args.tema:
-            sucess_message += f" Tema: {args.tema}."
-            file_name += f"_tema_{args.tema}"
-        if args.termo:
-            sucess_message += f" Termo: {args.termo}."
-            file_name += f"_termo_{args.termo}"
         file_name += ".csv"
         print(sucess_message)        
-        
-        data = organize_data(data, args.social_network)        
-
+             
         social_network_folder = args.social_network.value
         folder_path = os.path.join(os.getcwd(), social_network_folder)
-
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
-
         file_path = os.path.join(folder_path, file_name)
         save_to_csv(data, file_path)
     except errors.ServerSelectionTimeoutError as err:
@@ -313,6 +329,13 @@ if __name__ == "__main__":
     )
     
     parser.add_argument(
+        "--get_comments",
+        action="store_true",
+        help="Pegar comentários ao invés de posts",
+        default=False
+    )
+    
+    parser.add_argument(
         "--tema",
         type=str,
         help="Tema da pesquisa",
@@ -327,4 +350,4 @@ if __name__ == "__main__":
     )
     
     args = parser.parse_args()
-    main(args.social_network, args.inicio, args.fim)
+    main(args.social_network, args.inicio, args.fim, args.get_comments)
