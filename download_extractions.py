@@ -39,7 +39,7 @@ def set_mongo_database(project: str) -> str:
     elif project in Project.RSF.name:
         return Project.RSF.value
     else:
-        raise ValueError("Projeto não reconhecido")
+        raise ValueError("Projeto não reconhecido. Valores aceitos: MMA, VACINA, RSF")
 
 
 def connect_to_mongodb(connection_string: str) -> MongoClient:
