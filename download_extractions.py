@@ -27,7 +27,20 @@ def establish_ssh_tunnel(ssh_command: str, ssh_passphrase: str) -> pexpect.spawn
         print("O túnel SSH não pôde ser estabelecido. O tempo limite expirou.")
         ssh_process.kill(9)
         raise
+
+
+def set_mongo_database(project: str) -> str:
+    """Defines the database based on the project."""
     
+    if project in Project.MMA.name:
+        return Project.MMA.value
+    elif project in Project.VACINA.name:
+        return Project.VACINA.value
+    elif project in Project.RSF.name:
+        return Project.RSF.value
+    else:
+        raise ValueError("Projeto não reconhecido. Valores aceitos: MMA, VACINA, RSF")
+
 
 def connect_to_mongodb(connection_string: str) -> MongoClient:
     """Connects to a MongoDB database using a given connection string."""
@@ -43,6 +56,14 @@ def query_mongodb(client: MongoClient, database: str, collection: str, query: di
     """Queries a MongoDB collection and returns the results."""
     
     return list(client[database][collection].find(query))
+
+
+class Project(Enum):
+    """Enum class to represent the projects with available data."""
+
+    MMA = "Raw"
+    VACINA = "Vacinal_Raw"
+    RSF = "ReportersSF_Raw"
 
 
 class SocialNetwork(Enum):
@@ -135,6 +156,7 @@ class SocialNetwork(Enum):
                         end = len(post_url)
                     return post_url[start:end]
                 return ''
+            
             new_row.update({
                 'channelId': body.get('authorId', ''),
                 'channelTitle': body.get('authorName', ''),
@@ -173,22 +195,20 @@ def organize_data(posts: dict, social_network: SocialNetwork, get_comments: bool
     count = 0
     for post in posts:
         if get_comments:
-            content = post['comments']
-            new_row = social_network.get_comments(content, count)
-            data += new_row
-            count += len(new_row)
+            comments = post['comments']
+            new_rows = social_network.get_comments(comments, count)
+            data.extend(new_rows)
+            count += len(new_rows)
         else:
-            if social_network != SocialNetwork.YOUTUBE:
-                new_row_base = {
-                    '': count,
-                    ' ': '',
-                }
-            else:
-                new_row_base = {
-                    'position': count,
-                }
-            if social_network == SocialNetwork.INSTAGRAM: new_row_base.update({'ID': post['postId']})    
-            if social_network == SocialNetwork.TIKTOK: new_row_base.update({'Video ID': post['postId']})        
+            new_row_base = {'position': count} \
+                if social_network == SocialNetwork.YOUTUBE \
+                else {'': count, ' ': ''}
+            
+            if social_network == SocialNetwork.INSTAGRAM:
+                new_row_base['ID'] = post['postId']
+            elif social_network == SocialNetwork.TIKTOK:
+                new_row_base['Video ID'] = post['postId']
+            
             content = post['postHistory'][-1]
             new_row = social_network.get_posts(new_row_base, content)
             data.append(new_row)
@@ -239,8 +259,11 @@ def main(social_network: SocialNetwork, since_date_str: str, until_date_str: str
         raise ValueError("Start date must be before end date.")
     
     load_dotenv()
-    SSH_COMMAND = f"sudo ssh -f -N -o TCPKeepAlive=yes -o ServerAliveInterval=60 -L {env_variable('MONGO_PORT')}:localhost:{env_variable('MONGO_PORT')} -i {env_variable('SSH_PRIVATE_KEY')} {env_variable('SSH_USER')}@{env_variable('SSH_HOST')}"
+    SSH_COMMAND = f"""sudo ssh -f -N -o TCPKeepAlive=yes -o ServerAliveInterval=60 -L 
+        {env_variable('MONGO_PORT')}:localhost:{env_variable('MONGO_PORT')} -i 
+        {env_variable('SSH_PRIVATE_KEY')} {env_variable('SSH_USER')}@{env_variable('SSH_HOST')}"""
     MONGO_COLLECTION = f"{social_network.value}_{'comment' if get_comments else 'postsV2'}"
+    MONGO_DATABASE = set_mongo_database(env_variable("PROJECT"))
     QUERY = {
         "createdAt": {
             "$gte": since_date,
@@ -256,7 +279,7 @@ def main(social_network: SocialNetwork, since_date_str: str, until_date_str: str
         ssh_process = establish_ssh_tunnel(SSH_COMMAND, env_variable("SSH_PASSPHRASE"))
         client = connect_to_mongodb(env_variable("MONGO_CONNECTION_STRING"))
         print(f"Iniciando consulta ao MongoDB para a rede social {social_network.value}...")
-        data = query_mongodb(client, env_variable("MONGO_DATABASE"), MONGO_COLLECTION, QUERY)
+        data = query_mongodb(client, MONGO_DATABASE, MONGO_COLLECTION, QUERY)
         if len(data) == 0:
             failed_message = f"Nenhum resultado encontrado no intervalo de {since_date_str} a {until_date_str}."
             if args.tema:
@@ -268,16 +291,15 @@ def main(social_network: SocialNetwork, since_date_str: str, until_date_str: str
         
         data, num_results = organize_data(data, args.social_network, args.get_comments)   
         sucess_message = f"Encontrado {num_results} resultados no intervalo de {since_date_str} a {until_date_str}."
+        file_name = f"{social_network.value}"
         if args.tema and not args.get_comments:
             sucess_message += f" Tema: {args.tema}."
             file_name += f"_tema_{args.tema}"
         if args.termo and not args.get_comments:
             sucess_message += f" Termo: {args.termo}."
             file_name += f"_termo_{args.termo}"
-        file_name = f"{social_network.value}"
         file_name += f"_comments_{since_date_str}_{until_date_str}.csv" if args.get_comments \
                                                                     else f"_posts_{since_date_str}_{until_date_str}.csv"
-
         print(sucess_message)        
              
         social_network_folder = args.social_network.value
