@@ -8,6 +8,7 @@ import time
 import json
 import csv
 import os
+import re
 
 
 def establish_ssh_tunnel(ssh_command: str, ssh_passphrase: str) -> pexpect.spawn:
@@ -51,6 +52,7 @@ class SocialNetwork(Enum):
     TIKTOK = "tiktok"
     INSTAGRAM = "instagram"
     FACEBOOK = "facebook"
+    YOUTUBE = "youtube"
     
     def get_posts(self, new_row_base, content) -> dict:
         body, metadata = content['body'], content.get('metadata', {})
@@ -124,6 +126,38 @@ class SocialNetwork(Enum):
                 'URL': body.get('postUrl', ''),
                 'Profile Image':'', # not found in the data
             })
+        elif self == SocialNetwork.YOUTUBE:
+            def _get_video_id(post_url: str) -> str:
+                if 'v=' in post_url:
+                    start = post_url.find('v=') + 2
+                    end = post_url.find('&', start)
+                    if end == -1:
+                        end = len(post_url)
+                    return post_url[start:end]
+                return ''
+            new_row.update({
+                'channelId': body.get('authorId', ''),
+                'channelTitle': body.get('authorName', ''),
+                'videoId': _get_video_id(body.get('postUrl', '')),
+                'videoUrl': body.get('postUrl', ''),
+                'publishedAt': timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+                'videoTitle': body.get('title', ''),
+                'videoDescription': re.sub(r'\s+', ' ', body.get('text') or ''),
+                'tags': body.get('tags', ''),
+                'videoCategoryId': body.get('categoryId', ''),
+                'duration': body.get('details',{}).get('duration', ''),
+                'dimension':body.get('details',{}).get('dimension', ''),
+                'definition': body.get('details',{}).get('definition', ''),
+                'caption': body.get('details',{}).get('caption', ''),
+                'defaultLanguage': body.get('defaultAudioLanguage', ''),
+                'thumbnail_maxres': body.get('thumbnails', {}).get('maxres', {}).get('url', ''),
+                'licensedContent': body.get('details',{}).get('licensedContent', ''),
+                'viewCount': metadata.get('stats', {}).get('seen', 0),
+                'LikeCount': metadata.get('stats', {}).get('like', 0),
+                'dislikeCount':'', # not found in the data
+                'favoriteCount': metadata.get('stats', {}).get('favorite', 0),
+                'commentCount': metadata.get('stats', {}).get('comment')
+            })
         else:
             raise ValueError(f"Rede social não suportada: {self.value}")
         return new_row
@@ -144,10 +178,15 @@ def organize_data(posts: dict, social_network: SocialNetwork, get_comments: bool
             data += new_row
             count += len(new_row)
         else:
-            new_row_base = {
-                '': count,
-                ' ': '',
-            }
+            if social_network != SocialNetwork.YOUTUBE:
+                new_row_base = {
+                    '': count,
+                    ' ': '',
+                }
+            else:
+                new_row_base = {
+                    'position': count,
+                }
             if social_network == SocialNetwork.INSTAGRAM: new_row_base.update({'ID': post['postId']})    
             if social_network == SocialNetwork.TIKTOK: new_row_base.update({'Video ID': post['postId']})        
             content = post['postHistory'][-1]
@@ -177,10 +216,8 @@ def save_to_csv(data: list, file_name: str):
         )
         
         writer.writeheader()
-        
         for row in data:
-            writer.writerow(row)
-            
+            writer.writerow(row)   
     print(f"Arquivo {os.path.basename(file_name)} salvo com sucesso.")
 
 
@@ -238,7 +275,8 @@ def main(social_network: SocialNetwork, since_date_str: str, until_date_str: str
             sucess_message += f" Termo: {args.termo}."
             file_name += f"_termo_{args.termo}"
         file_name = f"{social_network.value}"
-        file_name += f"_comments_{since_date_str}_{until_date_str}.csv" if args.get_comments else f"_posts_{since_date_str}_{until_date_str}.csv"
+        file_name += f"_comments_{since_date_str}_{until_date_str}.csv" if args.get_comments \
+                                                                    else f"_posts_{since_date_str}_{until_date_str}.csv"
 
         print(sucess_message)        
              
