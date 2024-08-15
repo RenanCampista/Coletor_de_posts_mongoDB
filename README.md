@@ -1,6 +1,7 @@
 # Coletor de posts do MongoDB
 
 Este script foi desenvolvido para baixar dados do MongoDB a partir de um intervalo de tempo e transformá-los em arquivos CSV. 
+Link do repositório: https://github.com/RenanCampista/Coletor_de_posts_mongoDB
 
 ## Instalação
 
