@@ -1,9 +1,9 @@
+"""Script to download data from MongoDB and save it to a csv file. """
 from pymongo import MongoClient, errors
 from dotenv import load_dotenv
 from datetime import datetime
 from enum import Enum
 import pexpect
-import argparse
 import time
 import json
 import csv
@@ -11,9 +11,9 @@ import os
 import re
 
 
+########################################### DATABASE FUNCTIONS ###########################################
 def establish_ssh_tunnel(ssh_command: str, ssh_passphrase: str) -> pexpect.spawn:
     """Establishes an SSH tunnel using a given command and passphrase with pexpect."""
-    
     try:
         print("Estabelecendo túnel SSH com pexpect...")
         ssh_process = pexpect.spawn(ssh_command, timeout=30)
@@ -29,38 +29,54 @@ def establish_ssh_tunnel(ssh_command: str, ssh_passphrase: str) -> pexpect.spawn
         raise
 
 
-def set_mongo_database(project: str) -> str:
-    """Defines the database based on the project."""
-    
-    if project in Project.MMA.name:
-        return Project.MMA.value
-    elif project in Project.VACINA.name:
-        return Project.VACINA.value
-    elif project in Project.RSF.name:
-        return Project.RSF.value
-    else:
-        raise ValueError("Projeto não reconhecido. Valores aceitos: MMA, VACINA, RSF")
-
-
 def connect_to_mongodb(connection_string: str) -> MongoClient:
     """Connects to a MongoDB database using a given connection string."""
-    
-    print("Conectando ao MongoDB...")
-    client = MongoClient(connection_string, serverSelectionTimeoutMS=20000)
-    client.admin.command('ping')  # Force a server selection to check the connection
-    print("Conexão com o MongoDB estabelecida.")
-    return client
+    try:
+        print("Conectando ao MongoDB...")
+        client = MongoClient(connection_string, serverSelectionTimeoutMS=20000)
+        client.admin.command('ping')  # Force a server selection to check the connection
+        print("Conexão com o MongoDB estabelecida.")
+        return client
+    except errors.ServerSelectionTimeoutError as err:
+        print(f"Erro de seleção de servidor ao conectar ao MongoDB: {err}")
+        raise
+    except Exception as e:
+        print(f"Erro ao conectar ao MongoDB: {e}")
+        raise
 
 
 def query_mongodb(client: MongoClient, database: str, collection: str, query: dict) -> list:
     """Queries a MongoDB collection and returns the results."""
+    try:
+        return list(client[database][collection].find(query))
+    except Exception as e:
+        print(f"Erro ao realizar consulta ao MongoDB: {e}")
+        raise
+
+
+def build_query(start_date: datetime, end_date: datetime, theme: str) -> dict:
+    """Builds a query to filter data by date and theme."""
+    query = {
+        "createdAt": {
+            "$gte": start_date,
+            "$lte": end_date
+        }
+    }
+    if theme:
+        query['themes'] = { "$in": theme}
+    return query
+
+
+
+########################################### ENUMS ###########################################
+class TypeExport(Enum):
+    """Enum class to represent the types of data to be exported."""
+    POSTS = "postsV2"
+    COMMENTS = "comment"
     
-    return list(client[database][collection].find(query))
-
-
+    
 class Project(Enum):
     """Enum class to represent the projects with available data."""
-
     MMA = "Raw"
     VACINA = "Vacinal_Raw"
     RSF = "ReportersSF_Raw"
@@ -68,7 +84,6 @@ class Project(Enum):
 
 class SocialNetwork(Enum):
     """Enum class to represent the social network to be converted."""
-    
     TWITTER = "twitter"
     TIKTOK = "tiktok"
     INSTAGRAM = "instagram"
@@ -133,7 +148,7 @@ class SocialNetwork(Enum):
                 'Likes': metadata.get('stats', {}).get('like', 0),
                 'Comments': metadata.get('stats', {}).get('comment', 0),
                 'Date created': timestamp.strftime('%Y-%m-%d %H:%M:%S'),
-                'Caption': (body.get('text') or '').replace('\n', ' '),
+                'Caption': re.sub(r'\n', ' ', body.get('text') or ''),
                 'URL': body.get('postUrl', ''),
             })    
         elif self == SocialNetwork.FACEBOOK:
@@ -188,37 +203,25 @@ class SocialNetwork(Enum):
         return [self.get_posts({'': count, ' ': ''}, comment) for count, comment in enumerate(comments, start=count)]
 
 
-def organize_data(posts: dict, social_network: SocialNetwork, get_comments: bool = False) -> tuple[list, int]:
-    """Organize data to be saved in a csv file"""
+
+########################################### UTILS ###########################################
+def select_enum(enum_class):
+    """Prompts the user to select a value from an Enum class."""
+    choices = {str(index): enum_member for index, enum_member in enumerate(enum_class, start=1)}
+    print(f"\nSelecione uma opção de {enum_class.__name__}:")
+    for index, enum_member in choices.items():
+        print(f"{index} - {enum_member.name}")
     
-    data = []
-    count = 0
-    for post in posts:
-        if get_comments:
-            comments = post['comments']
-            new_rows = social_network.get_comments(comments, count)
-            data.extend(new_rows)
-            count += len(new_rows)
+    while True:
+        choice = input("Digite o número da opção desejada: ")
+        if choice in choices:
+            return choices[choice]
         else:
-            new_row_base = {'position': count} \
-                if social_network == SocialNetwork.YOUTUBE \
-                else {'': count, ' ': ''}
-            
-            if social_network == SocialNetwork.INSTAGRAM:
-                new_row_base['ID'] = post['postId']
-            elif social_network == SocialNetwork.TIKTOK:
-                new_row_base['Video ID'] = post['postId']
-            
-            content = post['postHistory'][-1]
-            new_row = social_network.get_posts(new_row_base, content)
-            data.append(new_row)
-            count += 1
-    return data, count
+            print("Opção inválida, tente novamente.")
 
 
 def save_to_json(data: list, filename: str) -> None:
     """Saves a list of data to a JSON file."""
-    
     with open(filename, "w") as file:
         json.dump(data, file, indent=4, default=str)
     print("Dados salvos em JSON.")
@@ -226,7 +229,6 @@ def save_to_json(data: list, filename: str) -> None:
 
 def save_to_csv(data: list, file_name: str):
     """Write data to a csv file using csv module."""
-    
     with open(file_name, mode='w', newline='', encoding='utf-8') as file:
         writer = csv.DictWriter(
             f=file, 
@@ -239,125 +241,120 @@ def save_to_csv(data: list, file_name: str):
         for row in data:
             writer.writerow(row)   
     print(f"Arquivo {os.path.basename(file_name)} salvo com sucesso.")
-
-
-def env_variable(var_name: str) -> str:
-    """Gets an environment variable or raises an exception if it is not set."""
     
-    if not (var_value := os.getenv(var_name)):
-        raise ValueError(f"Variável de ambiente {var_name} não definida. Verifique o arquivo .env.")
+    
+def env_variable(var_name: str) -> str:
+    """Retrieves an environment variable and raises an error if not found."""
+    var_value = os.getenv(var_name)
+    if not var_value:
+        raise EnvironmentError(f"Variável de ambiente '{var_name}' não encontrada.")
     return var_value
 
 
-def main(social_network: SocialNetwork, since_date_str: str, until_date_str: str, get_comments: bool):
+def filter_data_by_date(data, reference_date):
+    """Filtra os dados e retorna apenas aqueles com a data superior à data fornecida."""
+    filtered_data = []
+    for item in data:
+        item_date_str = item.get('Date', '')
+        if item_date_str:
+            item_date = datetime.strptime(item_date_str, '%Y-%m-%d %H:%M:%S')
+            if item_date > reference_date:
+                filtered_data.append(item)
+    return filtered_data
+
+
+def organize_data(posts: dict, social_network: SocialNetwork, get_comments: bool = False) -> tuple[list, int]:
+    """Organize data to be saved in a csv file"""
+    def add_url_and_shortcode(rows, url, shortcode):
+        """Add URL and shortcode to each row in the list."""
+        for row in rows:
+            row['Post URL'] = url
+            row['SourceShortCode'] = shortcode
+
+    def create_new_row_base(post, social_network):
+        """Create a base dictionary for new rows based on the social network."""
+        new_row_base = {}
+        if social_network == SocialNetwork.INSTAGRAM:
+            new_row_base["SourceShortCode"] = ''
+            new_row_base['type'] = 'comment' if get_comments else 'post'
+            new_row_base["SourceLink"] = ''
+        elif social_network == SocialNetwork.TIKTOK:
+            new_row_base['Video ID'] = post['postId']
+        elif social_network == SocialNetwork.TWITTER:
+            new_row_base['lineid'] = post['terms']
+            new_row_base[''] = ''
+        return new_row_base
+
+    data = []
+    count = 0
+
+    for post in posts:
+        if get_comments:
+            comments = post['comments']
+            new_rows = social_network.get_comments(comments, count)
+            if social_network in {SocialNetwork.INSTAGRAM, SocialNetwork.TIKTOK}:
+                add_url_and_shortcode(new_rows, post['postUrl'], post['postShortcode'])
+            data.extend(new_rows)
+            count += len(new_rows)
+        else:
+            new_row_base = create_new_row_base(post, social_network)
+            content = post['postHistory'][-1]
+            new_row = social_network.get_posts(new_row_base, content)
+            data.append(new_row)
+            count += 1
+    return data, count
+
+
+
+########################################### MAIN FUNCTIONS ###########################################
+def main():
     """Main function to download data from MongoDB and save it to a csv file."""
+    social_network = select_enum(SocialNetwork)
+    project = select_enum(Project)
+    type_export = select_enum(TypeExport)
+    theme = input("Informe um tema (digite '*' para todos): ")
+    if theme == '*': theme = ''
+
+    start_date_str = input("Informe a data de início (formato: AAAA-MM-DD): ")
+    end_date_str = input("Informe a data de término (formato: AAAA-MM-DD): ")
+    start_date = datetime.strptime(start_date_str + " 00:00:00", "%Y-%m-%d %H:%M:%S")
+    end_date = datetime.strptime(end_date_str + " 23:59:59", "%Y-%m-%d %H:%M:%S")
+    if start_date > end_date:
+        raise ValueError("A data de início não pode ser maior que a data de término.")
     
-    since_date = datetime.strptime(since_date_str + " 00:00:00", "%Y-%m-%d %H:%M:%S")
-    until_date = datetime.strptime(until_date_str + " 23:59:59", "%Y-%m-%d %H:%M:%S")
-    
-    if since_date > until_date:
-        raise ValueError("Start date must be before end date.")
+    query = build_query(start_date, end_date, theme)
     
     load_dotenv()
-    SSH_COMMAND = f"""sudo ssh -f -N -o TCPKeepAlive=yes -o ServerAliveInterval=60 -L 
+    ssh_command = f"""sudo ssh -f -N -o TCPKeepAlive=yes -o ServerAliveInterval=60 -L 
         {env_variable('MONGO_PORT')}:localhost:{env_variable('MONGO_PORT')} -i 
         {env_variable('SSH_PRIVATE_KEY')} {env_variable('SSH_USER')}@{env_variable('SSH_HOST')}"""
-    MONGO_COLLECTION = f"{social_network.value}_{'comment' if get_comments else 'postsV2'}"
-    MONGO_DATABASE = set_mongo_database(env_variable("PROJECT"))
-    QUERY = {
-        "createdAt": {
-            "$gte": since_date,
-            "$lte": until_date
-        }
-    }
-    if args.tema and isinstance(args.tema, str) and not args.get_comments:
-        QUERY["postHistory.metadata.collect.theme"] = args.tema
-    if args.termo and isinstance(args.termo, str) and not args.get_comments:
-        QUERY["postHistory.metadata.collect.terms"] = {"$all": [args.termo]}
+    mongo_collection = f"{social_network.value}_{type_export.value}"
     
-    try:
-        ssh_process = establish_ssh_tunnel(SSH_COMMAND, env_variable("SSH_PASSPHRASE"))
-        client = connect_to_mongodb(env_variable("MONGO_CONNECTION_STRING"))
-        print(f"Iniciando consulta ao MongoDB para a rede social {social_network.value}...")
-        data = query_mongodb(client, MONGO_DATABASE, MONGO_COLLECTION, QUERY)
-        if len(data) == 0:
-            failed_message = f"Nenhum resultado encontrado no intervalo de {since_date_str} a {until_date_str}."
-            if args.tema:
-                failed_message += f" Tema: {args.tema}."
-            if args.termo:
-                failed_message += f" Termo: {args.termo}."
-            print(failed_message)
-            return
-        
-        data, num_results = organize_data(data, args.social_network, args.get_comments)   
-        sucess_message = f"Encontrado {num_results} resultados no intervalo de {since_date_str} a {until_date_str}."
-        file_name = f"{social_network.value}"
-        if args.tema and not args.get_comments:
-            sucess_message += f" Tema: {args.tema}."
-            file_name += f"_tema_{args.tema}"
-        if args.termo and not args.get_comments:
-            sucess_message += f" Termo: {args.termo}."
-            file_name += f"_termo_{args.termo}"
-        file_name += f"_comments_{since_date_str}_{until_date_str}.csv" if args.get_comments \
-                                                                    else f"_posts_{since_date_str}_{until_date_str}.csv"
-        print(sucess_message)        
-             
-        social_network_folder = args.social_network.value
-        folder_path = os.path.join(os.getcwd(), social_network_folder)
-        if not os.path.exists(folder_path):
-            os.makedirs(folder_path)
-        file_path = os.path.join(folder_path, file_name)
-        save_to_csv(data, file_path)
-    except errors.ServerSelectionTimeoutError as err:
-        print(f"Erro de seleção de servidor ao conectar ao MongoDB: {err}")
-    except Exception as e:
-        print(f"Erro: {e}")
-    finally:
-        print("Fechando o túnel SSH...")
-        ssh_process.terminate()
+    ssh_process = establish_ssh_tunnel(ssh_command, env_variable("SSH_PASSPHRASE"))
+    client = connect_to_mongodb(env_variable("MONGO_CONNECTION_STRING"))
+    print(f"Iniciando consulta ao MongoDB para a rede social {social_network.value}...")
+    data = query_mongodb(client, project.value, mongo_collection, query)
+    
+    if len(data) == 0:
+        print(f"Nenhum resultado encontrado no intervalo de {start_date} a {end_date} com o tema: {'*' if not theme else theme}.")
+        return
+    
+    data, num_results = organize_data(data, social_network, type_export == TypeExport.COMMENTS)
+    data = filter_data_by_date(data, start_date)
+    print(f"Foram coletados {num_results} dados no intervalo de {start_date} a {end_date} com o tema: {theme}.")
+    print(f"{len(data)} dados criados a partir da data {start_date}.")
 
+    file_name = f"{social_network.value}_{type_export.value}_{start_date_str}_{end_date_str}.csv"
+    social_network_folder = social_network.value
+    folder_path = os.path.join(os.getcwd(), social_network_folder)
+    if not os.path.exists(folder_path):
+        os.makedirs(folder_path)
+    file_path = os.path.join(folder_path, file_name)
+    save_to_csv(data, file_path)
 
+    ssh_process.terminate()
+    print(f"Processo concluído com sucesso. Arquivo salvo em {file_path}.")
+    
+    
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Baixa dados de uma rede social de um banco de dados MongoDB e salva em um arquivo CSV.",
-        formatter_class=argparse.RawTextHelpFormatter,
-    )
-    parser.add_argument(
-        "social_network",
-        type=SocialNetwork,
-        choices=SocialNetwork,
-        help="Rede social que deseja baixar os dados. Opções: twitter, tiktok, instagram, facebook."
-    )
-    parser.add_argument(
-        "--inicio",
-        type=str,
-        help="Data de início no formato AAAA-MM-DD",
-        required=True
-    )
-    parser.add_argument(
-        "--fim",
-        type=str,
-        help="Data de fim no formato AAAA-MM-DD",
-        required=True
-    )
-    parser.add_argument(
-        "--get_comments",
-        action="store_true",
-        help="Pegar comentários ao invés de posts",
-        default=False
-    )
-    parser.add_argument(
-        "--tema",
-        type=str,
-        help="Tema da pesquisa",
-        default=None
-    )
-    parser.add_argument(
-        "--termo",
-        type=str,
-        help="Termo da pesquisa",
-        default=None
-    )
-    args = parser.parse_args()
-    main(args.social_network, args.inicio, args.fim, args.get_comments)
-    
+    main()
