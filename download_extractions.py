@@ -3,8 +3,6 @@ from pymongo import MongoClient, errors
 from dotenv import load_dotenv
 from datetime import datetime
 from enum import Enum
-import pexpect
-import time
 import json
 import csv
 import os
@@ -12,23 +10,6 @@ import re
 
 
 ########################################### DATABASE FUNCTIONS ###########################################
-def establish_ssh_tunnel(ssh_command: str, ssh_passphrase: str) -> pexpect.spawn:
-    """Establishes an SSH tunnel using a given command and passphrase with pexpect."""
-    try:
-        print("Estabelecendo túnel SSH com pexpect...")
-        ssh_process = pexpect.spawn(ssh_command, timeout=30)
-        ssh_process.expect("Enter passphrase for key .*:")
-        print("Informando a passphrase...")
-        ssh_process.sendline(ssh_passphrase)
-        time.sleep(3)
-        print("Conexão SSH estabelecida.")
-        return ssh_process
-    except pexpect.exceptions.TIMEOUT:
-        print("O túnel SSH não pôde ser estabelecido. O tempo limite expirou.")
-        ssh_process.kill(9)
-        raise
-
-
 def connect_to_mongodb(connection_string: str) -> MongoClient:
     """Connects to a MongoDB database using a given connection string."""
     try:
@@ -280,9 +261,9 @@ def organize_data(posts: dict, social_network: SocialNetwork, get_comments: bool
             new_row_base["SourceLink"] = ''
         elif social_network == SocialNetwork.TIKTOK:
             new_row_base['Video ID'] = post['postId']
-        elif social_network == SocialNetwork.TWITTER:
-            new_row_base['lineid'] = post['terms']
-            new_row_base[''] = ''
+        # elif social_network == SocialNetwork.TWITTER:
+        #     new_row_base['lineid'] = post['terms']
+        #     new_row_base[''] = ''
         return new_row_base
 
     data = []
@@ -325,12 +306,9 @@ def main():
     query = build_query(start_date, end_date, theme)
     
     load_dotenv()
-    ssh_command = f"""sudo ssh -f -N -o TCPKeepAlive=yes -o ServerAliveInterval=60 -L 
-        {env_variable('MONGO_PORT')}:localhost:{env_variable('MONGO_PORT')} -i 
-        {env_variable('SSH_PRIVATE_KEY')} {env_variable('SSH_USER')}@{env_variable('SSH_HOST')}"""
+    
     mongo_collection = f"{social_network.value}_{type_export.value}"
     
-    ssh_process = establish_ssh_tunnel(ssh_command, env_variable("SSH_PASSPHRASE"))
     client = connect_to_mongodb(env_variable("MONGO_CONNECTION_STRING"))
     print(f"Iniciando consulta ao MongoDB para a rede social {social_network.value}...")
     data = query_mongodb(client, project.value, mongo_collection, query)
@@ -352,7 +330,6 @@ def main():
     file_path = os.path.join(folder_path, file_name)
     save_to_csv(data, file_path)
 
-    ssh_process.terminate()
     print(f"Processo concluído com sucesso. Arquivo salvo em {file_path}.")
     
     
